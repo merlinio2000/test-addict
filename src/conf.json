@@ -1,9 +1,9 @@
 {
   "do-debug": true,
-  "GitHub-Hook-Secret": "not for you :)",
   "port": 8081,
   "routines": [{
     "branches-to-process": ["stable", "master"],
+    "__comment-clone-dir": "The delivery ID will be appendended to the folder name to support concurrent runs",
     "git-clone-dir": "G:\\cooltool\\test-addict\\clone-here",
     "__comment-cmd": "All *-cmd commands will be executed with 'git-clone-dir' as working directory",
     "cleanup-clone-cmd": "rm -rf",

@@ -8,7 +8,7 @@ import (
 
 type Config struct {
 	DoDebug          bool   `json:"do-debug"`
-	GitHubHookSecret string `json:"GitHub-Hook-Secret"` //TODO Refactor to ENV VAR
+	GitHubHookSecret string
 	Port             int    `json:"port"`
 	Routines         []struct {
 		BranchesToProcess []string `json:"branches-to-process"`
@@ -21,6 +21,10 @@ type Config struct {
 func LoadConfig(jsonConfPath string) Config {
 
 	newConf := Config{}
+	
+	if newConf.GitHubHookSecret = os.Getenv("GH_HOOK_SECRET"); len(newConf.GitHubHookSecret) == 0 {
+		panic("Environment Variable GH_HOOK_SECRET not defined")
+	}
 
 	jsonConfContent, err := ioutil.ReadFile(jsonConfPath)
 
@@ -29,7 +33,7 @@ func LoadConfig(jsonConfPath string) Config {
 	}
 
 	if jsonErr := json.Unmarshal(jsonConfContent, &newConf); jsonErr != nil {
-		panic(fmt.Sprintf("Unable to unmarshall config file <%s>", jsonErr))
+		panic(fmt.Sprintf("Unable to unmarshal config file <%s>", jsonErr))
 	}
 
 	return newConf
