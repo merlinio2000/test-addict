@@ -1,0 +1,12 @@
+{
+  "do-debug": true,
+  "GitHub-Hook-Secret": "not for you :)",
+  "port": 8081,
+  "routines": [{
+    "branches-to-process": ["stable", "master"],
+    "git-clone-dir": "G:\\cooltool\\test-addict\\clone-here",
+    "__comment-cmd": "All *-cmd commands will be executed with 'git-clone-dir' as working directory",
+    "cleanup-clone-cmd": "rm -rf",
+    "test-clone-cmd": "./gradlew.bat test"
+  }]
+}
