@@ -11,12 +11,14 @@ import (
 	"strings"
 )
 
+// Create a sha256 sum of the body using the provided secret
 func signBody(secret, body []byte) []byte {
 	computed := hmac.New(sha256.New, secret)
 	computed.Write(body)
 	return []byte(computed.Sum(nil))
 }
 
+// Verifies the signature as sha256 using constant time comparison for enhanced security
 func verifySignature(secret []byte, signature string, body []byte) bool {
 	const signaturePrefix = "sha256="
 	const signatureLength = len(signaturePrefix) + 256/4 // <- number of hex characters needed to represent the 256bit sha sum
@@ -27,7 +29,7 @@ func verifySignature(secret []byte, signature string, body []byte) bool {
 
 	actual := make([]byte, 256/8)                                                           // <- number of bytes needed to represent the 256bit sha sum
 	if _, err := hex.Decode(actual, []byte(signature[len(signaturePrefix):])); err != nil { // slice prefix away and decode hex signature
-		log.Fatalf("ERROR decoding SHA hex <%s>", err)
+		log.Fatalf("ERROR decoding SHA hex <%v>", err)
 		return false
 	}
 	// Perform constant time comparison to avoid timing attacks
@@ -41,6 +43,7 @@ type HookContext struct {
 	Payload   []byte
 }
 
+// Verify request headers and validates the sent secret hash
 func ParseHook(secret []byte, httpReq *http.Request) (*HookContext, error) {
 	hookCtx := HookContext{}
 

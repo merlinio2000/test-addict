@@ -1,0 +1,20 @@
+{
+  "do-debug": true,
+  "port": 8081,
+  "routines": [{
+    "branches-to-process": ["developer_merlin", "stable", "master"],
+    "__comment-clone-dir": "The delivery ID will be appendended to the folder name to support concurrent runs",
+    "git-clone-dir": "G:/cooltool/test-addict/clone-here",
+    "__comment-cmd": "All *-cmd commands will be executed with 'git-clone-dir' as working directory",
+    "test-clone-cmd-exe": "gradlew",
+    "test-clone-cmd-args": "run build",
+    "remove-on-success": true,
+    "remove-on-failure": false,
+    "mail-to": ["${pusher}", "maggimer@students.zhaw.ch"]
+  }],
+  "mailing": {
+    "smtp-host": "smtp.gmail.com",
+    "smtp-port": "587",
+    "from-addr": "testaddict@gmail.com"
+  }
+}
