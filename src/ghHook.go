@@ -245,12 +245,27 @@ func main() {
 	exe += "/conf.json"
 	log.Printf("Picking up default config at %s\n", exe)
 	configArg := flag.String("config", exe, "path to the JSON config file")
+	loadFileArg := flag.String("file", "", "load Payload from file instead of listening")
 	flag.Parse() // automatically handles -help, unhandled flags, etc...
 
 	config = LoadConfig(*configArg)
-	// spawns a new go routine for each request
-	// access to 'config' still IS thread safe as it wont be modified after loading
-	http.HandleFunc("/payload", HookHandler)
+	if *loadFileArg != "" {
+		payloadFile, payloadErr := os.ReadFile(*loadFileArg)
+		if payloadErr != nil {
+			panic(fmt.Sprintf("Unable to open payload file <%v>", payloadErr))
+		}
 
-	http.ListenAndServe(":8081", nil)
+		loadedPayload := &ghPayload{}
+		if jsonErr := json.Unmarshal(payloadFile, loadedPayload); jsonErr != nil {
+			panic(fmt.Sprintf("Unable to unmarshal payload file <%+v>", jsonErr))
+		}
+
+		RunRoutine(loadedPayload, "loaded-from-file")
+	} else {
+		// spawns a new go routine for each request
+		// access to 'config' still IS thread safe as it wont be modified after loading
+		http.HandleFunc("/payload", HookHandler)
+
+		http.ListenAndServe(":8081", nil)
+	}
 }
