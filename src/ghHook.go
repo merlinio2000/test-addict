@@ -30,14 +30,15 @@ type ghPayload struct {
 	// commit id before push
 	Before string
 	// commit id after push
-	After string
-
-	CloneURL     string `json:"clone_url"`
-	MasterBranch string `json:"master_branch"`
-	Pusher       struct {
-		name  string
-		email string
-	}
+	After      string
+	Repository struct {
+		CloneURL     string `json:"clone_url"`
+		MasterBranch string `json:"master_branch"`
+	} `json:"repository"`
+	Pusher struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	} `json:"pusher"`
 	// url for quick compare in the browser
 	CompareURL string `json:"compare"`
 }
@@ -79,9 +80,11 @@ func SendReportMail(payload *ghPayload, recipients []string, success bool) {
 	// replace placeholders in recipients
 	for idx, recp := range recipients {
 		if recp == "${pusher}" {
-			recipients[idx] = payload.Pusher.email
+			recipients[idx] = payload.Pusher.Email
 		}
 	}
+
+	log.Printf("Sending mail to %s", strings.Join(recipients, ";"))
 
 	// Instatiate SMTP Auth interface
 	smtpAuth := smtp.PlainAuth("", config.Mailing.FromAddr, config.Mailing.FromAddr, config.Mailing.SMTPHost)
@@ -98,6 +101,12 @@ func SendReportMail(payload *ghPayload, recipients []string, success bool) {
 // Clones the repo (only branch that was pushed to) living at payload.CloneURL into config.Routines[i].GitCloneDir
 // it does this for EVERY element in config.Routines where the branch is included in routine.BranchesToProcess
 func RunRoutine(payload *ghPayload, deliveryID string) {
+
+	if config.DoDebug {
+		log.Printf("Processing delivery %s with the following payload\n", deliveryID)
+		log.Printf("%+v", *payload)
+	}
+
 	// find the correct routine
 	splitRefPath := strings.Split(payload.Ref, "/")
 	branch := splitRefPath[len(splitRefPath)-1] // last element should be only the branch name
@@ -108,26 +117,32 @@ func RunRoutine(payload *ghPayload, deliveryID string) {
 				// guaranteed to be unique as long as github works correctly (and the correct argument was passed :) )
 				gitCloneDir := routine.GitCloneDir + deliveryID + branch
 
-				// TODO debug here
+				log.Printf("Will use '%s' as git directory", gitCloneDir)
 
 				if cloneDirErr := os.Mkdir(gitCloneDir, os.ModePerm); cloneDirErr != nil {
-					log.Printf("Error creating clone directory(<%s>), wont process this payload <%v>\n", deliveryID, cloneDirErr)
+					log.Printf("Error creating clone directory(<%s>), wont process this payload <%v>\n", gitCloneDir, cloneDirErr)
 					return
 				}
 				// Use git to clone the branch that was pushed to
-				gitCloneCmd := exec.Command("git", "clone", "--branch "+branch, payload.CloneURL)
+				gitCloneCmd := exec.Command("git", "clone", "--branch", branch, payload.Repository.CloneURL)
 				// Execute command from specified directory
 				gitCloneCmd.Dir = gitCloneDir
+
+				if config.DoDebug {
+					log.Printf("Will be using <%s> as git command", gitCloneCmd.String())
+				}
+
 				// stderr gets merged to stdout, runs command
-				stdout, gitErr := gitCloneCmd.CombinedOutput()
+				gitStdout, gitErr := gitCloneCmd.CombinedOutput()
 				if gitErr != nil {
 					log.Printf("Error cloning from git <%v>, skipping this one\n", gitErr)
+					log.Println(string(gitStdout[:]))
 					return
 				}
 
 				if config.DoDebug {
 					log.Println("DEBUG stdout of git")
-					log.Println(stdout)
+					log.Println(string(gitStdout[:]))
 				}
 
 				// Run tests on the cloned repo
@@ -135,10 +150,10 @@ func RunRoutine(payload *ghPayload, deliveryID string) {
 				testCmd.Dir = gitCloneDir
 				testoutput, testErr := testCmd.CombinedOutput()
 				if testErr != nil {
-					log.Printf("ERROR running Test on branch <%s> by %s (%s)\n", branch, payload.Pusher.name, payload.Pusher.email)
+					log.Printf("ERROR running Test on branch <%s> by %s (%s)\n", branch, payload.Pusher.Name, payload.Pusher.Email)
 					log.Printf("ERROR description <%v>\n", testErr)
 					log.Println("Command output:")
-					log.Println(testoutput)
+					log.Println(string(testoutput[:]))
 
 					if routine.RemoveOnFailure {
 						// remove clone after successfull test
@@ -146,11 +161,11 @@ func RunRoutine(payload *ghPayload, deliveryID string) {
 					}
 					SendReportMail(payload, routine.MailTo, false)
 				} else {
-					log.Printf("Test Successfull on branch <%s> by %s (%s)\n", branch, payload.Pusher.name, payload.Pusher.email)
+					log.Printf("Test Successfull on branch <%s> by %s (%s)\n", branch, payload.Pusher.Name, payload.Pusher.Email)
 
 					if config.DoDebug {
 						log.Println("Command output:")
-						log.Println(testoutput)
+						log.Println(string(testoutput[:]))
 					}
 
 					if routine.RemoveOnSuccess {
@@ -204,9 +219,12 @@ func HookHandler(httpResp http.ResponseWriter, httpReq *http.Request) {
 	} else {
 		var recvPayload ghPayload
 		if jsonErr := json.Unmarshal(hookCtx.Payload, &recvPayload); jsonErr == nil {
+
+			log.Printf("Will be processing delivery %s", hookCtx.Id)
 			// Actual programm Logic
 			RunRoutine(&recvPayload, hookCtx.Id)
 
+			log.Printf("All good, bye")
 			httpResp.WriteHeader(http.StatusOK)
 		} else { // Error in JSON Request body from GitHub
 			HandleFail(http.StatusBadRequest, fmt.Sprintf("ERROR unmarshalling JSON request Payload <%v>", jsonErr))

@@ -40,13 +40,6 @@ func LoadConfig(jsonConfPath string) Config {
 	}
 
 	jsonConfContent, err := os.ReadFile(jsonConfPath)
-	/*
-		for idx, char := range jsonConfContent {
-			if char == 0x7f {
-				log.Printf("Gotem at idx=%d\n", idx)
-			}
-		}
-	*/
 	if err != nil {
 		panic(fmt.Sprintf("Unable to open config file <%v>", err))
 	}
