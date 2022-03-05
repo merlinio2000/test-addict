@@ -106,10 +106,18 @@ func RunRoutine(payload *ghPayload, deliveryID string) {
 		log.Printf("Processing delivery %s with the following payload\n", deliveryID)
 		log.Printf("%+v", *payload)
 	}
-
+	const illegalChars = " |&$"
 	// find the correct routine
 	splitRefPath := strings.Split(payload.Ref, "/")
 	branch := splitRefPath[len(splitRefPath)-1] // last element should be only the branch name
+
+	if strings.ContainsAny(branch, illegalChars) {
+		log.Fatalf("Discovered Illegal Chars that could be used for manipulation for the OS command in branchname<%s>\n", branch)
+	}
+
+	if strings.ContainsAny(payload.Repository.CloneURL, illegalChars) {
+		log.Fatalf("Discovered Illegal Chars that could be used for manipulation for the OS command in repository url<%s>\n", payload.Repository.CloneURL)
+	}
 
 	for _, routine := range config.Routines {
 		for _, branchToDo := range routine.BranchesToProcess {
