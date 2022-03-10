@@ -116,6 +116,9 @@ func SendReportMail(report MailReport, recipients []string) {
 		mailBody.WriteString(fmt.Sprintf("%s: %s\r\n", k, v))
 	}
 
+	// newline before mail body
+	mailBody.WriteString("\r\n")
+
 	if templFillErr := templ.Execute(&mailBody, report); templFillErr != nil {
 		log.Printf("Couldnt fill email body template <%v>", templFillErr)
 		log.Println("Defaulting back to %+v representation; Some data might have still been written and the result may appear scuffed")
@@ -177,7 +180,8 @@ func RunRoutine(payload *ghPayload, deliveryID string) {
 					return
 				}
 				// Use git to clone the branch that was pushed to
-				gitCloneCmd := exec.Command("git", "clone", "--branch", branch, payload.Repository.CloneURL)
+				// . will clone into the current directory (no sub directory)
+				gitCloneCmd := exec.Command("git", "clone", "--branch", branch, payload.Repository.CloneURL, ".")
 				// Execute command from specified directory
 				gitCloneCmd.Dir = gitCloneDir
 
