@@ -20,10 +20,11 @@ type Config struct {
 		MailTo            []string `json:"mail-to"`
 	} `json:"routines"`
 	Mailing struct {
-		SMTPHost string `json:"smtp-host"`
-		SMTPPort string `json:"smtp-port"`
-		FromAddr string `json:"from-addr"`
-		FromPW   string // set through env var
+		SMTPHost     string `json:"smtp-host"`
+		SMTPPort     string `json:"smtp-port"`
+		FromIdentity string `json:"from-identity"`
+		FromAddr     string `json:"from-addr"`
+		FromPW       string // set through env var
 	} `json:"mailing"`
 }
 

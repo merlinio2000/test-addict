@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h2>Output:</h2><span>{{.Message}}</span><br/><br/>
+    <h3>Ref:</h3><span>{{.Payload.Ref}}</span><br/><br/>
+    <h3>Before:</h3><span>{{.Payload.Before}}</span><br/>
+    <h3>After:</h3><span>{{.Payload.After}}</span><br/>
+    <h3>CloneURL:</h3><span>{{.Payload.Repository.CloneURL}}</span><br/>
+    <h3>Pusher:</h3><span>{{.Payload.Pusher.Name}} ({{.Payload.Pusher.Email}})</span><br/>
+    <h3>CompareURL:</h3><span>{{.Payload.CompareURL}}</span><br/>
+</body>
+</html>

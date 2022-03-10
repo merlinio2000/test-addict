@@ -6,15 +6,16 @@
     "__comment-clone-dir": "The delivery ID will be appendended to the folder name to support concurrent runs",
     "git-clone-dir": "/home/manjinio/Documents/cooltool/test-addict/clone-here",
     "__comment-cmd": "All *-cmd commands will be executed with 'git-clone-dir' as working directory",
-    "test-clone-cmd-exe": "gradlew",
-    "test-clone-cmd-args": "run build",
+    "test-clone-cmd-exe": "./gradlew",
+    "test-clone-cmd-args": "test",
     "remove-on-success": true,
     "remove-on-failure": false,
-    "mail-to": ["${pusher}", "maggimer@students.zhaw.ch"]
+    "mail-to": ["maggimer@students.zhaw.ch"]
   }],
   "mailing": {
-    "smtp-host": "smtp.gmail.com",
+    "smtp-host": "smtp.sendgrid.net",
     "smtp-port": "587",
-    "from-addr": "testaddict@gmail.com"
+    "from-identity": "apikey",
+    "from-addr": "maggimer@students.zhaw.ch"
   }
 }

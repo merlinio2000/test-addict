@@ -7,8 +7,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -16,7 +18,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"text/template"
 )
 
 // Global config Variable, gets initialized in main()
@@ -43,9 +44,45 @@ type ghPayload struct {
 	CompareURL string `json:"compare"`
 }
 
+// Used to contain information relevant to an email
+type MailReport struct {
+	Payload *ghPayload
+	Success bool
+	Message string
+}
+
+// golang smtp AUTH LOGIN fix; https://github.com/go-gomail/gomail/issues/16
+type loginAuth struct {
+	username, password string
+}
+
+func LoginAuth(username, password string) smtp.Auth {
+	return &loginAuth{username, password}
+}
+
+func (a *loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	return "LOGIN", []byte{}, nil
+}
+
+func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if more {
+		switch string(fromServer) {
+		case "Username:":
+			return []byte(a.username), nil
+		case "Password:":
+			return []byte(a.password), nil
+		default:
+			return nil, errors.New("Unkown fromServer:" + string(fromServer))
+		}
+	}
+	return nil, nil
+}
+
 // Send Test Execution Report to recipients
 // ${pusher} inside of recipients will be replaced with payload.Pusher.email
-func SendReportMail(payload *ghPayload, recipients []string, success bool) {
+func SendReportMail(report MailReport, recipients []string) {
+
+	payload := report.Payload
 
 	if config.DoDebug {
 		fmt.Printf("Report: payload: %+v\n", *payload)
@@ -60,7 +97,7 @@ func SendReportMail(payload *ghPayload, recipients []string, success bool) {
 	}
 
 	subject := "Test %s on " + payload.Ref
-	if success {
+	if report.Success {
 		subject = fmt.Sprintf(subject, "successfull")
 	} else {
 		subject = fmt.Sprintf(subject, "FAILED")
@@ -68,10 +105,18 @@ func SendReportMail(payload *ghPayload, recipients []string, success bool) {
 
 	var mailBody bytes.Buffer
 
-	mimeHeaders := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
-	mailBody.Write([]byte(fmt.Sprintf("Subject: %s \n%s\n\n", subject, mimeHeaders)))
+	header := make(map[string]string)
+	header["From"] = config.Mailing.FromAddr
+	header["To"] = strings.Join(recipients, ",")
+	header["Subject"] = subject
+	header["MIME-Version"] = "1.0"
+	header["Content-Type"] = "text/html; charset=\"utf-8\""
 
-	if templFillErr := templ.Execute(&mailBody, *payload); templFillErr != nil {
+	for k, v := range header {
+		mailBody.WriteString(fmt.Sprintf("%s: %s\r\n", k, v))
+	}
+
+	if templFillErr := templ.Execute(&mailBody, report); templFillErr != nil {
 		log.Printf("Couldnt fill email body template <%v>", templFillErr)
 		log.Println("Defaulting back to %+v representation; Some data might have still been written and the result may appear scuffed")
 		mailBody.WriteString(fmt.Sprintf("%+v", *payload))
@@ -84,12 +129,12 @@ func SendReportMail(payload *ghPayload, recipients []string, success bool) {
 		}
 	}
 
-	log.Printf("Sending mail to %s", strings.Join(recipients, ";"))
+	log.Printf("Sending mail to %s", strings.Join(recipients, ","))
 
-	// Instatiate SMTP Auth interface
-	smtpAuth := smtp.PlainAuth("", config.Mailing.FromAddr, config.Mailing.FromAddr, config.Mailing.SMTPHost)
+	// Instatiate overridden SMTP Auth interface
+	smtpAuth := LoginAuth(config.Mailing.FromIdentity, config.Mailing.FromPW)
 
-	mailErr := smtp.SendMail(config.Mailing.SMTPHost+":"+config.Mailing.SMTPPort, smtpAuth, config.Mailing.FromAddr, recipients, []byte(fmt.Sprintf("%+v", payload)))
+	mailErr := smtp.SendMail(config.Mailing.SMTPHost+":"+config.Mailing.SMTPPort, smtpAuth, config.Mailing.FromAddr, recipients, mailBody.Bytes())
 
 	if mailErr != nil {
 		log.Printf("Error sending report mail <%v>", mailErr)
@@ -157,17 +202,23 @@ func RunRoutine(payload *ghPayload, deliveryID string) {
 				testCmd := exec.Command(routine.TestCloneCmdExe, routine.TestCloneCmdArgs)
 				testCmd.Dir = gitCloneDir
 				testoutput, testErr := testCmd.CombinedOutput()
+
+				var success bool
+				var mailMsg string
+
 				if testErr != nil {
 					log.Printf("ERROR running Test on branch <%s> by %s (%s)\n", branch, payload.Pusher.Name, payload.Pusher.Email)
 					log.Printf("ERROR description <%v>\n", testErr)
 					log.Println("Command output:")
 					log.Println(string(testoutput[:]))
 
+					success = false
+					mailMsg = fmt.Sprintf("%+v\n%s\n", testErr, string(testoutput[:]))
+
 					if routine.RemoveOnFailure {
 						// remove clone after successfull test
 						defer os.RemoveAll(gitCloneDir)
 					}
-					SendReportMail(payload, routine.MailTo, false)
 				} else {
 					log.Printf("Test Successfull on branch <%s> by %s (%s)\n", branch, payload.Pusher.Name, payload.Pusher.Email)
 
@@ -176,12 +227,15 @@ func RunRoutine(payload *ghPayload, deliveryID string) {
 						log.Println(string(testoutput[:]))
 					}
 
+					success = true
+					mailMsg = fmt.Sprintf("%s\n", string(testoutput[:]))
+
 					if routine.RemoveOnSuccess {
 						// remove clone after successfull test
 						defer os.RemoveAll(gitCloneDir)
 					}
-					SendReportMail(payload, routine.MailTo, true)
 				}
+				SendReportMail(MailReport{Payload: payload, Success: success, Message: mailMsg}, routine.MailTo)
 
 			}
 		}
@@ -240,7 +294,6 @@ func HookHandler(httpResp http.ResponseWriter, httpReq *http.Request) {
 		}
 	}
 	io.WriteString(httpResp, "{}")
-	return
 }
 
 // Program entry point
